@@ -7,6 +7,8 @@ interface AuthContextType extends AuthState {
   loginAsDemo: () => Promise<boolean>;
   logout: () => void;
   updateUser: (user: User) => void;
+  clearAllData: () => void;
+  updateUserRole: (userId: string, newRole: 'admin' | 'pharmacist' | 'staff') => Promise<boolean>;
   isDemoMode: boolean;
 }
 
@@ -212,6 +214,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const updateUserRole = async (userId: string, newRole: 'admin' | 'pharmacist' | 'staff'): Promise<boolean> => {
+    try {
+      const users = getStoredUsers();
+      const userToUpdate = users.find(u => u.id === userId);
+      
+      if (!userToUpdate) {
+        return false;
+      }
+
+      const updatedUser: StoredUser = { ...userToUpdate, role: newRole };
+      const updatedUsers = users.map(u => u.id === userId ? updatedUser : u);
+      storeUsers(updatedUsers);
+      
+      // Update current user if it's the same user
+      if (state.user && state.user.id === userId) {
+        const { password, ...userWithoutPassword } = updatedUser;
+        storeAuth(userWithoutPassword);
+        dispatch({ type: 'UPDATE_USER', payload: userWithoutPassword });
+      }
+      
+      return true;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  const clearAllData = () => {
+    localStorage.removeItem('pharmacy_users');
+    localStorage.removeItem('pharmacy_auth');
+    localStorage.removeItem('mk_pharmacy_demo_mode');
+  };
+
   const value: AuthContextType = {
     ...state,
     login,
@@ -219,6 +253,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     loginAsDemo,
     logout,
     updateUser,
+    clearAllData,
+    updateUserRole,
     isDemoMode,
   };
 

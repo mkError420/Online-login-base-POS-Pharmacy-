@@ -25,7 +25,8 @@ import {
   Mail,
   Phone,
   MapPin,
-  Globe
+  Globe,
+  Shield
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { 
@@ -47,6 +48,7 @@ import { Medicine, Sale, SaleItem, Settings } from './types';
 import { cn, formatCurrency, exportToCSV } from './lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { AuthProvider } from './contexts/AuthContext';
+import { RoleManagement } from './components/RoleManagement';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { useAuth } from './contexts/AuthContext';
 import { LogOut, User } from 'lucide-react';
@@ -1217,8 +1219,9 @@ function SalesHistory({ sales, settings, onPrint }: { sales: Sale[], settings: S
 
 // --- Settings Component ---
 function SettingsView({ settings, onUpdate }: { settings: Settings, onUpdate: (updates: Partial<Settings>) => void }) {
-  const [formData, setFormData] = useState(settings);
   const [isSaved, setIsSaved] = useState(false);
+  const [showRoleManagement, setShowRoleManagement] = useState(false);
+  const [formData, setFormData] = useState(settings);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1389,6 +1392,29 @@ function SettingsView({ settings, onUpdate }: { settings: Settings, onUpdate: (u
           </form>
         </div>
       </div>
+
+      {/* Role Management Section */}
+      <div className="bg-white p-6 rounded-3xl border border-[#E5E7EB] shadow-sm">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-bold text-gray-900">User Management</h3>
+          <button
+            onClick={() => setShowRoleManagement(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+          >
+            <Shield className="w-4 h-4" />
+            Manage Roles
+          </button>
+        </div>
+        <p className="text-sm text-gray-600">
+          As an admin, you can change user roles and permissions. This feature allows you to promote or demote users as needed.
+        </p>
+      </div>
+
+      {/* Role Management Modal */}
+      <RoleManagement 
+        isOpen={showRoleManagement}
+        onClose={() => setShowRoleManagement(false)}
+      />
     </div>
   );
 }

@@ -1219,10 +1219,22 @@ function SalesHistory({ sales, settings, onPrint }: { sales: Sale[], settings: S
 
 // --- Settings Component ---
 function SettingsView({ settings, onUpdate }: { settings: Settings, onUpdate: (updates: Partial<Settings>) => void }) {
+  const { user } = useAuth();
   const [isSaved, setIsSaved] = useState(false);
   const [showRoleManagement, setShowRoleManagement] = useState(false);
   const [formData, setFormData] = useState(settings);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Only allow admin access
+  if (!user || user.role !== 'admin') {
+    return (
+      <div className="max-w-4xl mx-auto p-8 text-center">
+        <Shield className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Restricted</h2>
+        <p className="text-gray-600">Only administrators can access the settings section.</p>
+      </div>
+    );
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

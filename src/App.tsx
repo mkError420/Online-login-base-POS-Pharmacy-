@@ -26,7 +26,8 @@ import {
   Phone,
   MapPin,
   Globe,
-  Shield
+  Shield,
+  RotateCcw
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { 
@@ -147,7 +148,8 @@ function AppContent() {
     { id: 'pos', label: 'New Sale', icon: ShoppingCart },
     { id: 'inventory', label: 'Inventory', icon: Package },
     { id: 'history', label: 'Sales History', icon: History },
-    { id: 'reports', label: 'Reports', icon: BarChart3 },
+    { id: 'returns', label: 'Return History', icon: RotateCcw },
+    { id: 'reports', label: 'Reports', icon: FileText },
     { id: 'settings', label: 'Settings', icon: SettingsIcon },
   ];
 
@@ -281,6 +283,7 @@ function AppContent() {
                   />
                 )}
                 {currentView === 'history' && <SalesHistory sales={sales} settings={settings} onPrint={setLastSale} />}
+                {currentView === 'returns' && <ReturnHistory />}
                 {currentView === 'reports' && <Reports sales={sales} medicines={medicines} />}
                 {currentView === 'settings' && <SettingsView settings={settings} onUpdate={updateSettings} />}
               </motion.div>
@@ -1163,12 +1166,101 @@ function MedicineInventory({
 function SalesHistory({ sales, settings, onPrint }: { sales: Sale[], settings: Settings, onPrint: (sale: Sale) => void }) {
   const { user } = useAuth();
   const [searchPhone, setSearchPhone] = useState('');
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+  const [returnItems, setReturnItems] = useState<{[key: string]: number}>({});
+  const [returnReason, setReturnReason] = useState('');
+  const [refundAmount, setRefundAmount] = useState(0);
 
   const filteredSales = useMemo(() => {
     return sales.filter(sale => 
       (sale.customerPhone || '').toLowerCase().includes(searchPhone.toLowerCase())
     );
   }, [sales, searchPhone]);
+
+  const handleReturnClick = () => {
+    if (filteredSales.length === 0) {
+      alert('No sales found. Please search for a sale first.');
+      return;
+    }
+    setShowReturnModal(true);
+  };
+
+  const handleSaleSelect = (sale: Sale) => {
+    setSelectedSale(sale);
+    // Initialize return items with 0 quantities
+    const initialReturns: {[key: string]: number} = {};
+    sale.items.forEach(item => {
+      initialReturns[item.medicineId] = 0;
+    });
+    setReturnItems(initialReturns);
+    setRefundAmount(0);
+    setReturnReason('');
+  };
+
+  const handleReturnQuantityChange = (medicineId: string, quantity: number, maxQuantity: number) => {
+    if (quantity >= 0 && quantity <= maxQuantity) {
+      const newReturnItems = { ...returnItems, [medicineId]: quantity };
+      setReturnItems(newReturnItems);
+      
+      // Calculate refund amount
+      const sale = selectedSale;
+      if (sale) {
+        let total = 0;
+        Object.entries(newReturnItems).forEach(([id, qty]) => {
+          const item = sale.items.find(i => i.medicineId === id);
+          if (item && qty > 0) {
+            total += item.price * qty;
+          }
+        });
+        setRefundAmount(total);
+      }
+    }
+  };
+
+  const processReturn = () => {
+    if (!selectedSale || returnReason.trim() === '') {
+      alert('Please select a sale and provide a return reason.');
+      return;
+    }
+
+    const hasReturnItems = Object.values(returnItems).some(qty => qty > 0);
+    if (!hasReturnItems) {
+      alert('Please select at least one item to return.');
+      return;
+    }
+
+    // Create return record
+    const returnRecord = {
+      id: `RET-${Date.now()}`,
+      originalSaleId: selectedSale.id,
+      items: Object.entries(returnItems)
+        .filter(([_, qty]) => qty > 0)
+        .map(([medicineId, quantity]) => ({
+          medicineId,
+          quantity,
+          price: selectedSale.items.find(item => item.medicineId === medicineId)?.price || 0
+        })),
+      refundAmount,
+      reason: returnReason,
+      date: new Date().toISOString(),
+      processedBy: user?.name || 'Admin'
+    };
+
+    // Store return record (in real app, this would go to backend)
+    const existingReturns = JSON.parse(localStorage.getItem('pharmacy_returns') || '[]');
+    existingReturns.push(returnRecord);
+    localStorage.setItem('pharmacy_returns', JSON.stringify(existingReturns));
+
+    alert(`Return processed successfully! Refund amount: ${formatCurrency(refundAmount)}`);
+    
+    // Reset and close modal
+    setShowReturnModal(false);
+    setSelectedSale(null);
+    setReturnItems({});
+    setReturnReason('');
+    setRefundAmount(0);
+  };
 
   return (
     <div className="space-y-6">
@@ -1186,13 +1278,22 @@ function SalesHistory({ sales, settings, onPrint }: { sales: Sale[], settings: S
             />
           </div>
           {user?.role === 'admin' && (
-            <button 
-              onClick={() => exportToCSV(filteredSales, 'sales_history.csv')}
-              className="bg-white text-gray-700 px-6 py-3 rounded-xl font-bold border border-[#E5E7EB] flex items-center gap-2 hover:bg-gray-50 transition-colors shadow-sm whitespace-nowrap"
-            >
-              <Download className="w-5 h-5" />
-              Export
-            </button>
+            <>
+              <button 
+                onClick={() => exportToCSV(filteredSales, 'sales_history.csv')}
+                className="bg-white text-gray-700 px-6 py-3 rounded-xl font-bold border border-[#E5E7EB] flex items-center gap-2 hover:bg-gray-50 transition-colors shadow-sm whitespace-nowrap"
+              >
+                <Download className="w-5 h-5" />
+                Export
+              </button>
+              <button 
+                onClick={handleReturnClick}
+                className="bg-orange-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-orange-700 transition-colors shadow-sm whitespace-nowrap"
+              >
+                <RotateCcw className="w-5 h-5" />
+                Return
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -1232,6 +1333,294 @@ function SalesHistory({ sales, settings, onPrint }: { sales: Sale[], settings: S
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Return Modal */}
+      <AnimatePresence>
+        {showReturnModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }}
+              onClick={() => setShowReturnModal(false)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm" 
+            />
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl relative z-10 overflow-hidden max-h-[90vh] overflow-y-auto"
+            >
+              <div className="p-6 border-b border-[#E5E7EB] flex justify-between items-center">
+                <h3 className="text-xl font-bold">Process Return</h3>
+                <button onClick={() => setShowReturnModal(false)} className="p-2 hover:bg-gray-100 rounded-full">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              
+              <div className="p-6">
+                {!selectedSale ? (
+                  <div>
+                    <h4 className="text-lg font-semibold mb-4">Select Sale to Return</h4>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {filteredSales.map(sale => (
+                        <div 
+                          key={sale.id}
+                          onClick={() => handleSaleSelect(sale)}
+                          className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-semibold">{sale.id}</p>
+                              <p className="text-sm text-gray-600">{format(new Date(sale.date), 'MMM dd, yyyy HH:mm')}</p>
+                              <p className="text-sm text-gray-600">{sale.customerPhone}</p>
+                            </div>
+                            <p className="font-bold text-emerald-600">{formatCurrency(sale.total)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                      <h4 className="font-semibold mb-2">Selected Sale</h4>
+                      <p><strong>ID:</strong> {selectedSale.id}</p>
+                      <p><strong>Date:</strong> {format(new Date(selectedSale.date), 'MMM dd, yyyy HH:mm')}</p>
+                      <p><strong>Customer:</strong> {selectedSale.customerPhone}</p>
+                      <p><strong>Total:</strong> {formatCurrency(selectedSale.total)}</p>
+                    </div>
+
+                    <div className="mb-6">
+                      <h4 className="font-semibold mb-4">Select Items to Return</h4>
+                      <div className="space-y-3">
+                        {selectedSale.items.map(item => (
+                          <div key={item.medicineId} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                            <div>
+                              <p className="font-medium">{item.name}</p>
+                              <p className="text-sm text-gray-600">{formatCurrency(item.price)} x {item.quantity}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button 
+                                onClick={() => handleReturnQuantityChange(item.medicineId, Math.max(0, (returnItems[item.medicineId] as number) - 1), item.quantity)}
+                                className="w-8 h-8 rounded-lg border border-gray-300 hover:bg-gray-100"
+                              >
+                                -
+                              </button>
+                              <span className="w-12 text-center">{returnItems[item.medicineId] || 0}</span>
+                              <button 
+                                onClick={() => handleReturnQuantityChange(item.medicineId, Math.min(item.quantity, (returnItems[item.medicineId] as number) + 1), item.quantity)}
+                                className="w-8 h-8 rounded-lg border border-gray-300 hover:bg-gray-100"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mb-6">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Return Reason
+                      </label>
+                      <textarea
+                        value={returnReason}
+                        onChange={(e) => setReturnReason(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        rows={3}
+                        placeholder="Enter reason for return..."
+                      />
+                    </div>
+
+                    <div className="mb-6 p-4 bg-orange-50 rounded-lg">
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold">Refund Amount:</span>
+                        <span className="text-xl font-bold text-orange-600">{formatCurrency(refundAmount)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={() => {
+                          setSelectedSale(null);
+                          setReturnItems({});
+                          setReturnReason('');
+                          setRefundAmount(0);
+                        }}
+                        className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                      >
+                        Back
+                      </button>
+                      <button 
+                        onClick={processReturn}
+                        className="flex-1 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors font-medium"
+                      >
+                        Process Return
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// --- Return History Component ---
+function ReturnHistory() {
+  const { user } = useAuth();
+  const [returns, setReturns] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Load returns from localStorage
+  React.useEffect(() => {
+    const storedReturns = JSON.parse(localStorage.getItem('pharmacy_returns') || '[]');
+    setReturns(storedReturns.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+  }, []);
+
+  const filteredReturns = returns.filter(returnRecord => 
+    returnRecord.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    returnRecord.originalSaleId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    returnRecord.reason.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    returnRecord.processedBy.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleDeleteReturn = (returnId: string) => {
+    if (confirm('Are you sure you want to delete this return record?')) {
+      const updatedReturns = returns.filter(r => r.id !== returnId);
+      setReturns(updatedReturns);
+      localStorage.setItem('pharmacy_returns', JSON.stringify(updatedReturns));
+    }
+  };
+
+  const handlePrintReturn = (returnRecord: any) => {
+    const printContent = `
+      <div style="padding: 20px; font-family: Arial;">
+        <h2>Return Receipt</h2>
+        <p><strong>Return ID:</strong> ${returnRecord.id}</p>
+        <p><strong>Original Sale ID:</strong> ${returnRecord.originalSaleId}</p>
+        <p><strong>Date:</strong> ${format(new Date(returnRecord.date), 'MMM dd, yyyy HH:mm')}</p>
+        <p><strong>Processed By:</strong> ${returnRecord.processedBy}</p>
+        <p><strong>Reason:</strong> ${returnRecord.reason}</p>
+        <hr>
+        <h3>Returned Items:</h3>
+        ${returnRecord.items.map((item: any) => 
+          `<p>${item.medicineId} - Qty: ${item.quantity} - ${formatCurrency(item.price * item.quantity)}</p>`
+        ).join('')}
+        <hr>
+        <p><strong>Total Refund:</strong> ${formatCurrency(returnRecord.refundAmount)}</p>
+      </div>
+    `;
+    
+    const printWindow = window.open('', '', 'width=600,height=600');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.print();
+    }
+  };
+
+  if (!user || user.role !== 'admin') {
+    return (
+      <div className="max-w-4xl mx-auto p-8 text-center">
+        <Shield className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Restricted</h2>
+        <p className="text-gray-600">Only administrators can access return history.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+        <h2 className="text-2xl font-black">Return History</h2>
+        <div className="flex flex-1 max-w-md w-full gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input 
+              type="text" 
+              placeholder="Search returns..." 
+              className="w-full pl-12 pr-4 py-3 bg-white border border-[#E5E7EB] rounded-xl outline-none focus:ring-2 focus:ring-emerald-500 shadow-sm"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <button 
+            onClick={() => exportToCSV(filteredReturns, 'return_history.csv')}
+            className="bg-white text-gray-700 px-6 py-3 rounded-xl font-bold border border-[#E5E7EB] flex items-center gap-2 hover:bg-gray-50 transition-colors shadow-sm whitespace-nowrap"
+          >
+            <Download className="w-5 h-5" />
+            Export
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-[#E5E7EB] shadow-sm overflow-hidden">
+        {filteredReturns.length === 0 ? (
+          <div className="text-center py-12">
+            <RotateCcw className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">No Return Records</h3>
+            <p className="text-gray-600">
+              {searchTerm ? 'No returns found matching your search.' : 'No returns have been processed yet.'}
+            </p>
+          </div>
+        ) : (
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-50 border-b border-[#E5E7EB]">
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Return ID</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Original Sale</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Date & Time</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Items</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Refund Amount</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Processed By</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#E5E7EB]">
+              {filteredReturns.map((returnRecord) => (
+                <tr key={returnRecord.id} className="hover:bg-gray-50/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <p className="font-bold text-gray-900">{returnRecord.id}</p>
+                    <p className="text-xs text-gray-500 truncate max-w-[120px]" title={returnRecord.reason}>
+                      {returnRecord.reason.substring(0, 30)}...
+                    </p>
+                  </td>
+                  <td className="px-6 py-4 font-medium text-gray-900">{returnRecord.originalSaleId}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">
+                    {format(new Date(returnRecord.date), 'MMM dd, yyyy HH:mm')}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{returnRecord.items.length} items</td>
+                  <td className="px-6 py-4 font-bold text-orange-600">{formatCurrency(returnRecord.refundAmount)}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{returnRecord.processedBy}</td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button 
+                        onClick={() => handlePrintReturn(returnRecord)}
+                        className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                        title="Print Return Receipt"
+                      >
+                        <Printer className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteReturn(returnRecord.id)}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                        title="Delete Return Record"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   );

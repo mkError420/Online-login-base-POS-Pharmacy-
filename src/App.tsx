@@ -272,7 +272,7 @@ function AppContent() {
                   setLastSale(newSale);
                 }} />}
                 {currentView === 'inventory' && (
-                  <Inventory 
+                  <MedicineInventory 
                     medicines={medicines} 
                     onAdd={addMedicine} 
                     onUpdate={updateMedicine} 
@@ -905,7 +905,7 @@ function POS({ medicines, onCompleteSale }: { medicines: Medicine[], onCompleteS
 }
 
 // --- Inventory Component ---
-function Inventory({ 
+function MedicineInventory({ 
   medicines, 
   onAdd, 
   onUpdate, 
@@ -918,10 +918,11 @@ function Inventory({
   onDelete: (id: string) => void,
   onImport: (m: Medicine[]) => void
 }) {
+  const { user } = useAuth();
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filtered = medicines.filter(m => 
     m.name.toLowerCase().includes(search.toLowerCase()) || 
@@ -971,35 +972,49 @@ function Inventory({
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex gap-3">
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleImport} 
-            accept=".csv" 
-            className="hidden" 
-          />
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            className="bg-white text-gray-700 px-6 py-3 rounded-xl font-bold border border-[#E5E7EB] flex items-center gap-2 hover:bg-gray-50 transition-colors shadow-sm"
-          >
-            <Upload className="w-5 h-5" />
-            Import
-          </button>
-          <button 
-            onClick={() => exportToCSV(medicines, 'inventory.csv')}
-            className="bg-white text-gray-700 px-6 py-3 rounded-xl font-bold border border-[#E5E7EB] flex items-center gap-2 hover:bg-gray-50 transition-colors shadow-sm"
-          >
-            <Download className="w-5 h-5" />
-            Export
-          </button>
-          <button 
-            onClick={() => setShowAddModal(true)}
-            className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100"
-          >
-            <Plus className="w-5 h-5" />
-            Add Medicine
-          </button>
+        <div className="flex flex-col sm:flex-row gap-4">
+          {/* Admin-only actions */}
+          {user?.role === 'admin' && (
+            <>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleImport} 
+                accept=".csv" 
+                className="hidden" 
+              />
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="bg-white text-gray-700 px-6 py-3 rounded-xl font-bold border border-[#E5E7EB] flex items-center gap-2 hover:bg-gray-50 transition-colors shadow-sm"
+              >
+                <Upload className="w-5 h-5" />
+                Import
+              </button>
+              <button 
+                onClick={() => exportToCSV(medicines, 'inventory.csv')}
+                className="bg-white text-gray-700 px-6 py-3 rounded-xl font-bold border border-[#E5E7EB] flex items-center gap-2 hover:bg-gray-50 transition-colors shadow-sm"
+              >
+                <Download className="w-5 h-5" />
+                Export
+              </button>
+              <button 
+                onClick={() => setShowAddModal(true)}
+                className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-100"
+              >
+                <Plus className="w-5 h-5" />
+                Add Medicine
+              </button>
+            </>
+          )}
+          
+          {/* Non-admin users see inventory access message */}
+          {user?.role !== 'admin' && (
+            <div className="text-center py-4 px-6 bg-blue-50 rounded-xl border border-blue-200">
+              <Package className="w-8 h-8 text-blue-500 mx-auto mb-2" />
+              <p className="text-blue-700 font-medium">Inventory Access</p>
+              <p className="text-sm text-blue-600 mt-1">Viewing inventory - Admin required to modify</p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1031,22 +1046,24 @@ function Inventory({
                 </td>
                 <td className="px-6 py-4 font-bold text-emerald-600">{formatCurrency(m.price)}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{format(new Date(m.expiryDate), 'MMM dd, yyyy')}</td>
-                <td className="px-6 py-4 text-right">
-                  <div className="flex justify-end gap-2">
-                    <button 
-                      onClick={() => { setEditingId(m.id); setShowAddModal(true); }}
-                      className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
-                    >
-                      <BarChart3 className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => onDelete(m.id)}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </td>
+                {user?.role === 'admin' && (
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button 
+                        onClick={() => { setEditingId(m.id); setShowAddModal(true); }}
+                        className="p-2 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                      >
+                        <BarChart3 className="w-4 h-4" />
+                      </button>
+                      <button 
+                        onClick={() => onDelete(m.id)}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -1144,6 +1161,7 @@ function Inventory({
 
 // --- Sales History Component ---
 function SalesHistory({ sales, settings, onPrint }: { sales: Sale[], settings: Settings, onPrint: (sale: Sale) => void }) {
+  const { user } = useAuth();
   const [searchPhone, setSearchPhone] = useState('');
 
   const filteredSales = useMemo(() => {
@@ -1167,13 +1185,15 @@ function SalesHistory({ sales, settings, onPrint }: { sales: Sale[], settings: S
               onChange={(e) => setSearchPhone(e.target.value)}
             />
           </div>
-          <button 
-            onClick={() => exportToCSV(filteredSales, 'sales_history.csv')}
-            className="bg-white text-gray-700 px-6 py-3 rounded-xl font-bold border border-[#E5E7EB] flex items-center gap-2 hover:bg-gray-50 transition-colors shadow-sm whitespace-nowrap"
-          >
-            <Download className="w-5 h-5" />
-            Export
-          </button>
+          {user?.role === 'admin' && (
+            <button 
+              onClick={() => exportToCSV(filteredSales, 'sales_history.csv')}
+              className="bg-white text-gray-700 px-6 py-3 rounded-xl font-bold border border-[#E5E7EB] flex items-center gap-2 hover:bg-gray-50 transition-colors shadow-sm whitespace-nowrap"
+            >
+              <Download className="w-5 h-5" />
+              Export
+            </button>
+          )}
         </div>
       </div>
       <div className="bg-white rounded-2xl border border-[#E5E7EB] shadow-sm overflow-hidden">

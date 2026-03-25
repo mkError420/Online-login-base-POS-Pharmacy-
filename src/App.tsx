@@ -1209,8 +1209,8 @@ function SalesHistory({ sales, settings, onPrint }: { sales: Sale[], settings: S
         let total = 0;
         Object.entries(newReturnItems).forEach(([id, qty]) => {
           const item = sale.items.find(i => i.medicineId === id);
-          if (item && qty > 0) {
-            total += item.price * qty;
+          if (item && (qty as number) > 0) {
+            total += (item.price as number) * (qty as number);
           }
         });
         setRefundAmount(total);
@@ -1224,7 +1224,7 @@ function SalesHistory({ sales, settings, onPrint }: { sales: Sale[], settings: S
       return;
     }
 
-    const hasReturnItems = Object.values(returnItems).some(qty => qty > 0);
+    const hasReturnItems = Object.values(returnItems).some((qty: number) => qty > 0);
     if (!hasReturnItems) {
       alert('Please select at least one item to return.');
       return;
@@ -1235,10 +1235,10 @@ function SalesHistory({ sales, settings, onPrint }: { sales: Sale[], settings: S
       id: `RET-${Date.now()}`,
       originalSaleId: selectedSale.id,
       items: Object.entries(returnItems)
-        .filter(([_, qty]) => qty > 0)
+        .filter(([_, qty]) => (qty as number) > 0)
         .map(([medicineId, quantity]) => ({
           medicineId,
-          quantity,
+          quantity: quantity as number,
           price: selectedSale.items.find(item => item.medicineId === medicineId)?.price || 0
         })),
       refundAmount,

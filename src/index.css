@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+@media print {
+  /* Hide all non-print elements */
+  .no-print,
+  aside,
+  main,
+  header,
+  button:not(.print-only) {
+    display: none !important;
+  }
+
+  /* Reset body and html for printing */
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+    width: 100% !important;
+  }
+
+  /* Position the modal container for printing */
+  .invoice-modal-container {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    display: block !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: white !important;
+    z-index: 9999 !important;
+    overflow: visible !important;
+  }
+
+  /* Reset intermediate containers for printing */
+  .invoice-modal-inner, .invoice-preview-panel {
+    display: block !important;
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    box-shadow: none !important;
+    border: none !important;
+    overflow: visible !important;
+  }
+
+  /* Style the printable invoice */
+  #printable-invoice {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 20px !important;
+    box-shadow: none !important;
+    border: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+    background: white !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    overflow: visible !important;
+    height: auto !important;
+    border-radius: 0 !important;
+  }
+
+  /* Thermal Receipt (80mm) */
+  .print-thermal {
+    width: 80mm !important;
+    margin: 0 auto !important;
+    padding: 5mm !important;
+    font-size: 10pt !important;
+  }
+
+  /* A4 Page */
+  .print-a4 {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    margin: 0 auto !important;
+    padding: 20mm !important;
+    font-size: 12pt !important;
+  }
+
+  /* Force colors to print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  @page {
+    margin: 0;
+  }
+
+  /* Specific page sizes */
+  @page thermal {
+    size: 80mm auto;
+    margin: 0;
+  }
+
+  @page a4 {
+    size: A4;
+    margin: 10mm;
+  }
+}
